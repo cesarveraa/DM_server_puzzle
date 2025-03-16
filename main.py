@@ -1,4 +1,5 @@
 # main.py
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List
@@ -8,8 +9,14 @@ from solve_puzzle import solve_puzzle, find_blank_position
 import model
 import ai
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Esto se ejecuta al iniciar la aplicación (startup)
+    ai.init(4)
+    yield
+    # Esto se ejecuta al cerrar la aplicación (shutdown), si necesitas limpiar algo
 
+app = FastAPI(lifespan=lifespan)
 # Configurar CORS
 app.add_middleware(
     CORSMiddleware,
@@ -22,10 +29,6 @@ app.add_middleware(
 class PuzzleRequest(BaseModel):
     matrix: List[List[int]]
 
-@app.on_event("startup")
-def initialize_pattern_db():
-    """Inicializar la base de datos de patrones al iniciar el servidor"""
-    ai.init(4)  # Cargar patrones para puzzle 4x4
 
 @app.post("/solve")
 async def solve_endpoint(request: PuzzleRequest):
@@ -56,3 +59,6 @@ async def solve_endpoint(request: PuzzleRequest):
         raise HTTPException(400, "El puzzle no tiene solución")
 
     return {"solution": solution_steps, "error": None}
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
